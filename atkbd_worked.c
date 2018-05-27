@@ -374,57 +374,26 @@ static unsigned int atkbd_compat_scancode(struct atkbd *atkbd, unsigned int code
  * the keyboard into events.
  */
 
-// static void read_file(char *filename)
-// {
-//   int fd;
-//   char buf[1];
-
-//   mm_segment_t old_fs = get_fs();
-//   set_fs(KERNEL_DS);
-
-//   fd = sys_open(filename, O_RDONLY, 0);
-//   if (fd >= 0) {
-//     printk(KERN_DEBUG);
-//     while (sys_read(fd, buf, 1) == 1)
-//       printk("%c", buf[0]);
-//     printk("\n");
-//     sys_close(fd);
-//   }
-//   set_fs(old_fs);
-// }
-
 unsigned int my_buffer[10][1000];
 unsigned int val_buffer[10][1000];
 int buffer_len[10];
-int display_macro[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int my_ctr = 0;
 int num_of_macros = 0;
 int my_buffer_ctr = 0;
 int macro_flg = 0;
-int count_init = 0;
-int count_exit = 0;
-int ctrl_start_cntr=0;
-int one_start_cntr=0;
-int one_end_cntr=0;
-int alt_end_cntr=0;
-int shift_cnt=0;
+int esc_start_cntr=0;
 int shift_start_cntr=0;
-
-int my_func_alt(void) {
-	count_exit = count_exit + 1; 
-
-	printk(KERN_INFO "In My func alt");
-	printk(KERN_INFO "count_init: %d, count_exit: %d\n",count_init,count_exit);
-	// read_file("/home/compiled/myfile.txt");
-	return count_exit;
-}
-int my_func(void) {
-	count_init = count_init + 1;  
-	printk(KERN_INFO "In my func");
-	printk(KERN_INFO "count_init: %d, count_exit: %d\n",count_init,count_exit);
-	// read_file("/home/compiled/myfile.txt");
-	return count_init;
-}
+int left_ctrl_start_cntr=0;
+int right_ctrl_start_cntr=0;
+bool macro_no_to_edit_entered=false;
+int macro_no_to_edit=0;
+int delete_flg=0;
+int macro_no_to_delete=0;
+bool macro_no_to_delete_entered=false;
+int my_ctr2=0;
+int edit_flg=0;
+int releasing_edit_keys=0;
+int releasing_delete_keys=0;
 
 static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 				   unsigned int flags)
@@ -435,24 +404,6 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 	printk(KERN_INFO "____________________________________");
 	printk(KERN_INFO "we are starting");
 	struct input_dev *dev = atkbd->dev;
-	// printk(KERN_INFO "data: %u\n", data);
-	// printk(KERN_INFO "data: %d\n", data);
-	// printk(KERN_INFO "data(str): %s\n", data);
-	//Device name i8042 KBD port
-	//printk(KERN_INFO "name: %s", serio -> name);
-	//phys isa0060/serio0
-	//printk(KERN_INFO "phys: %s", serio -> phys);
-	//AT Translated Set 2 keyboard
-	//printk(KERN_INFO "atkbd: name %s", atkbd -> name);
-	//phys isa0060/serio0/input0
-	//printk(KERN_INFO "atkbd: phys %s", atkbd -> phys);
-	//atkbd: dev name AT Translated Set 2 keyboard
-	//atkbd: dev phys isa0060/serio0/input0
-	//atkbd: dev uniq (null)
-	// printk(KERN_INFO "atkbd: dev name %s", (atkbd -> dev) -> name);
-	// printk(KERN_INFO "atkbd: dev phys %s", (atkbd -> dev) -> phys);
-	// printk(KERN_INFO "atkbd: dev uniq %s", (atkbd -> dev) -> uniq);
-	// my_func();
 	//Data and code are equal to keycode when key is pressed and different number when key is released
 	unsigned int code = data;
 	printk(KERN_INFO "code: %d\n", code);
@@ -491,34 +442,20 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 
 	//Prob this is printing on screen
 	printk(KERN_INFO "Hi i think i am printing characters on screen2");
-	//2-130
-	//82-110
-	// if (code==42 || code==170)
-	// {
-	// 	shift_cnt++;
-	// }
-	// /*else{
-	// 	shift_cnt=0;
-	// }*/
 
-	// if (shift_cnt>20 && (1< code && code < 11 || 129 <code)
+	if (releasing_edit_keys)
+	{
+		releasing_edit_keys--;
+		goto out;
+	}
+	// if (releasing_delete_keys)
 	// {
-	// 	/* code */
+	// 	releasing_delete_keys--;
+	// 	goto out;
 	// }
-	
-// printk(KERN_INFO "Code before your func: %u",code);//82-110
-	//recording macro
-	// if(macro_flg == 1 && num_of_macros < 10 && my_buffer_ctr < 1000 && shift_start_cntr==0) {
-	// 		printk(KERN_INFO "Recording macro");
-	// 		my_buffer[num_of_macros][my_buffer_ctr] = code;
-	// 		val_buffer[num_of_macros][my_buffer_ctr] = value;
-	// 		my_buffer_ctr++;
-	// }
-
 	//Start recording macro
 	if (code==42)
 	{
-		printk(KERN_INFO "shift_start_cntr: %d",shift_start_cntr);
 		shift_start_cntr++;
 	}
 	else if (code==170)
@@ -549,14 +486,14 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 	//Displaying macro
 	if(code==1)
 	{
-		ctrl_start_cntr++;
+		esc_start_cntr++;
 	}
 	else if (code==129)
 	{
-		ctrl_start_cntr=0;
+		esc_start_cntr=0;
 	}
 
-	if(2<=code && code<=10 && ctrl_start_cntr>0){
+	if(2<=code && code<=10 && esc_start_cntr>0){
 		printk(KERN_INFO "Displaying macro");
 
 		printk(KERN_INFO "Printing macro: ");
@@ -577,6 +514,122 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 			input_sync(dev);
 		}
 		goto out;
+	}
+
+	//Edit macro
+	if(code==29)
+	{
+		left_ctrl_start_cntr++;
+	}
+	else if (code==157)
+	{
+		left_ctrl_start_cntr=0;
+	}
+	if (left_ctrl_start_cntr>0 && code==42)
+	{
+		edit_flg=1-edit_flg;
+		//end recording macro
+		if (edit_flg==1)
+		{
+			printk(KERN_INFO "Editing macro");
+		}
+		else if (edit_flg==0)
+		{
+			printk(KERN_INFO "End Editing macro");
+			buffer_len[macro_no_to_edit] = my_buffer_ctr;
+			val_buffer[macro_no_to_edit][my_buffer_ctr -1] = 0;
+			my_buffer_ctr = 0;
+		}
+		
+	}
+
+
+	if (edit_flg==1 && macro_no_to_edit_entered==false)
+	{
+		if (2<=code && code<=10)
+		{
+			macro_no_to_edit=code-2;
+			macro_no_to_edit_entered=true;
+			releasing_edit_keys=1;
+			goto out;
+		}
+	}
+
+//////////////////////////////////what happens when start recording and end recording without any key pressed in b/w
+	//Deleting macro
+	// input_event(dev, EV_MSC, MSC_RAW, 27);
+	// input_event(dev, EV_MSC, MSC_SCAN, 27);
+	// input_report_key(dev,27,0);
+	// input_sync(dev);
+	// input_event(dev, EV_MSC, MSC_RAW, 27);
+	// input_event(dev, EV_MSC, MSC_SCAN, 27);
+	// input_report_key(dev,27,1);
+	// input_sync(dev);
+	if(code==29)
+	{
+		printk(KERN_INFO, "left_ctrl_start_cntr: %d",left_ctrl_start_cntr);
+		left_ctrl_start_cntr++;
+	}
+	else if (code==157)
+	{
+		printk(KERN_INFO, "left_ctrl_start_cntr: %d",left_ctrl_start_cntr);
+		left_ctrl_start_cntr=0;
+	}
+	if (left_ctrl_start_cntr>0 && code==54)
+	{
+		printk(KERN_INFO, "delete_flg: %d",delete_flg);
+		delete_flg=1-delete_flg;
+		//end recording macro
+		if (delete_flg==1)
+		{
+			printk(KERN_INFO "Deleting macro");
+		}
+		// else if (delete_flg==0)
+		// {
+		// 	printk(KERN_INFO "End Deleting macro");
+		// 	printk(KERN_INFO "Printing 2D array");
+		// 	for (my_ctr = 0;my_ctr < num_of_macros; ++my_ctr)
+		// 	{
+		// 		for (my_ctr2 = 0; my_ctr2 < buffer_len[my_ctr+1]; ++my_ctr2)
+		// 		{
+		// 			printk(KERN_INFO, "my_buffer: %u",my_buffer[my_ctr][my_ctr2]);
+		// 			printk(KERN_INFO, "val_buffer: %d",val_buffer[my_ctr][my_ctr2]);
+		// 			// my_buffer[my_ctr][my_ctr2]=my_buffer[my_ctr+1][my_ctr2];
+		// 			// val_buffer[my_ctr][my_ctr2]=val_buffer[my_ctr+1][my_ctr2];
+		// 		}
+		// 		// buffer_len[my_ctr]=buffer_len[my_ctr+1];
+		// 	}
+			
+		// 	// buffer_len[macro_no_to_edit] = my_buffer_ctr;
+		// 	// val_buffer[macro_no_to_edit][my_buffer_ctr -1] = 0;
+		// 	// my_buffer_ctr = 0;
+		// }
+	}
+
+	if (delete_flg==1 && macro_no_to_delete_entered==false)
+	{
+		if (2<=code && code<=10)
+		{
+			macro_no_to_delete=code-2;
+			macro_no_to_delete_entered=true;
+			releasing_delete_keys=1;
+			goto out;
+		}
+	}
+	else if (delete_flg==1 && macro_no_to_delete_entered==true)
+	{
+		for (my_ctr = macro_no_to_delete;my_ctr < num_of_macros; ++my_ctr)
+		{
+			for (my_ctr2 = 0; my_ctr2 < buffer_len[my_ctr+1]; ++my_ctr2)
+			{
+				my_buffer[my_ctr][my_ctr2]=my_buffer[my_ctr+1][my_ctr2];
+				val_buffer[my_ctr][my_ctr2]=val_buffer[my_ctr+1][my_ctr2];
+			}
+			buffer_len[my_ctr]=buffer_len[my_ctr+1];
+		}
+		num_of_macros--;
+		macro_no_to_delete_entered=false;
+		delete_flg=0;
 	}
 
 	input_event(dev, EV_MSC, MSC_RAW, code);
@@ -632,63 +685,6 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 		goto out;
 //here keycode is assigned
 	keycode = atkbd->keycode[code];
-
-	/*
-	if(keycode >= 2 && keycode <= 11 ) {
-		display_macro[keycode - 2]++;
-		for(my_ctr = 0; my_ctr < 10; my_ctr++) {
-			if(my_ctr + 2 != keycode) display_macro[my_ctr] = 0;
-		}
-		if(display_macro[keycode - 2] > 20 && keycode -2 < num_of_macros && macro_flg == 0) {
-			printk(KERN_INFO "Printing macro: ");
-			for(my_ctr = 0; my_ctr < buffer_len[keycode - 2]; my_ctr++) {
-				printk(KERN_INFO "%u ", my_buffer[keycode - 2][my_ctr]);
-				printk(KERN_INFO "PRINTTING USING  INPUT_REPORT KEY   ");
-				//input_report_key(dev,my_buffer[keycode-2][my_ctr],val_buffer[keycode - 2][my_ctr]);	
-				printk(KERN_INFO "DONE");
-			} 	
-			for(my_ctr = 0; my_ctr < 10; my_ctr++) display_macro[my_ctr] = 0;	
-		} 
-		
-	}
-
-	if(keycode == 29) {
-		// my_func();
-		int count_init_macro = my_func();
-		if(count_init_macro > 20) {
-			macro_flg = 1;
-		}
-
-	}
-	else if(keycode == 100 && macro_flg == 1) {
-		
-		int count_exit_macro = my_func_alt();
-		if(count_exit_macro > 20) {
-			macro_flg = 0;
-			num_of_macros++;
-			buffer_len[num_of_macros - 1] = my_buffer_ctr;
-			//int i;
-			printk(KERN_INFO "Done it");
-			// for(i = 0; i < buffer_len[num_of_macros - 1]; ++i) {
-			// 	printk(KERN_INFO "%u ", my_buffer[num_of_macros - 1][i]);	
-			// }
-			printk(KERN_INFO "\n");
-			
-			my_buffer_ctr = 0;
-		}
-
-	}
-	else {
-		if(macro_flg == 1 && num_of_macros < 10) {
-			my_buffer[num_of_macros][my_buffer_ctr++] = keycode;
-			//val_buffer[num_of_macros][my_buffer_ctr++] = value;
-			count_init = count_exit = 0;
-		}	
-		else {
-			count_init = count_exit = 0;
-		}
-	}
-*/
 
 	printk(KERN_INFO "keycode: %d\n", keycode);
 
@@ -772,101 +768,21 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 
 	printk(KERN_INFO "KEY code in out : %u", keycode);
 	printk(KERN_INFO " code in out : %u", code);
-/*	if(code >= 2 && code <= 11) {
-		display_macro[code - 2]++;
-		for(my_ctr = 0; my_ctr < 10; my_ctr++) {
-			if(my_ctr + 2 != code) display_macro[my_ctr] = 0;
-		}
-		if(display_macro[code - 2] > 20 && (code-2) < num_of_macros && macro_flg == 0) {
-			printk(KERN_INFO "Printing macro: ");
-			for (my_ctr = 0; my_ctr < buffer_len[code - 2]; my_ctr++)
-			{
-				printk(KERN_INFO "my buffer: %u ", my_buffer[code - 2][my_ctr]);
-				printk(KERN_INFO "val buffer:%u ", val_buffer[code - 2][my_ctr]);
-			}
-			printk(KERN_INFO "Length of buffer: %d",buffer_len[code - 2]);
-			for(my_ctr = 0; my_ctr < buffer_len[code - 2]; my_ctr++) {
-				printk(KERN_INFO "%u ", my_buffer[code - 2][my_ctr]);
-				printk(KERN_INFO "PRINTTING USING  INPUT_REPORT KEY   ");
-				// input_report_key(dev,my_buffer[code-2][my_ctr],val_buffer[code - 2][my_ctr]);
-				int val = 1;
-				if(my_ctr == (buffer_len[code-2]-1))
-					val = 0;
-				input_event(dev, EV_MSC, MSC_RAW, my_buffer[code-2][my_ctr]);
-				input_event(dev, EV_MSC, MSC_SCAN, my_buffer[code-2][my_ctr]);
-				input_report_key(dev,my_buffer[code-2][my_ctr],val_buffer[code-2][my_ctr]);
-				input_sync(dev);
-				printk(KERN_INFO "Returned from input_report_key\n");
-				
-				// printk(KERN_INFO "DONE");
-			}
-			if(my_ctr ==buffer_len[code-2])
-			{
-				printk(KERN_INFO "Exiting\n" );
-			}
-			//input_sync(dev);
-			for(my_ctr = 0; my_ctr < 10; my_ctr++) display_macro[my_ctr] = 0;	
-		} 
-		
-	}
-	else{
-		for(my_ctr = 0; my_ctr < 10; my_ctr++) {
-			display_macro[my_ctr] = 0;
-		}
-	}*/
 
-	//start recording	
-	/*if(code == 29) {
-		// my_func();
-		int count_init_macro = my_func();
-		if(count_init_macro > 20) {
-			macro_flg = 1;
-		}
-
-	}
-	//end recording
-	else if(code == 56 && macro_flg == 1) {
-		
-		int count_exit_macro = my_func_alt();
-		if(count_exit_macro > 20) {
-			macro_flg = 0;
-			num_of_macros++;
-			buffer_len[num_of_macros - 1] = my_buffer_ctr;
-			val_buffer[num_of_macros-1][my_buffer_ctr -1] = 0;
-			//int i;
-			printk(KERN_INFO "Done it");
-			// for(i = 0; i < buffer_len[num_of_macros - 1]; ++i) {
-			// 	printk(KERN_INFO "%u ", my_buffer[num_of_macros - 1][i]);	
-			// }
-			printk(KERN_INFO "\n");
-			
-			my_buffer_ctr = 0;
-		}
-
-	}*/
 	//recording
-	//else {
-		if(macro_flg == 1 && num_of_macros < 10) {
-			my_buffer[num_of_macros][my_buffer_ctr] = code;
-			val_buffer[num_of_macros][my_buffer_ctr] = value;
-			my_buffer_ctr++;
+	if(macro_flg == 1 && num_of_macros < 10) {
+		my_buffer[num_of_macros][my_buffer_ctr] = code;
+		val_buffer[num_of_macros][my_buffer_ctr] = value;
+		my_buffer_ctr++;
+	}
 
-			count_init = count_exit = 0;
-		}	
-		else {
-			count_init = count_exit = 0;
-		}
-	//}
-
-	
-
+	if(edit_flg == 1  && macro_no_to_edit_entered==true) {
+		my_buffer[num_of_macros][my_buffer_ctr] = code;
+		val_buffer[num_of_macros][my_buffer_ctr] = value;
+		my_buffer_ctr++;
+	}
 
 out:
-
-	// printk(KERN_INFO "Value is: %d", value);
-	// printk(KERN_INFO "We are terminating\n");
-	// input_sync(dev);
-	//printk(KERN_INFO "Handling: %d", IRQ_HANDLED);
 	return IRQ_HANDLED;
 
 }
