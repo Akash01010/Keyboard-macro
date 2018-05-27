@@ -394,6 +394,7 @@ int my_ctr2=0;
 int edit_flg=0;
 int releasing_edit_keys=0;
 int releasing_delete_keys=0;
+int edit_key_time=0;
 
 static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 				   unsigned int flags)
@@ -443,11 +444,11 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 	//Prob this is printing on screen
 	printk(KERN_INFO "Hi i think i am printing characters on screen2");
 
-	if (releasing_edit_keys)
-	{
-		releasing_edit_keys--;
-		goto out;
-	}
+	// if (releasing_edit_keys)
+	// {
+	// 	releasing_edit_keys--;
+	// 	goto out;
+	// }
 	// if (releasing_delete_keys)
 	// {
 	// 	releasing_delete_keys--;
@@ -540,7 +541,6 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 			val_buffer[macro_no_to_edit][my_buffer_ctr -1] = 0;
 			my_buffer_ctr = 0;
 		}
-		
 	}
 
 
@@ -550,11 +550,22 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 		{
 			macro_no_to_edit=code-2;
 			macro_no_to_edit_entered=true;
-			releasing_edit_keys=1;
+			// releasing_edit_keys=1;
+			// edit_key_time=2;
 			goto out;
 		}
 	}
-
+/*
+	if (edit_key_time>0)
+	{
+		edit_key_time--;
+	}
+	else if(edit_flg == 1  && macro_no_to_edit_entered==true && value!=2) {
+		my_buffer[macro_no_to_edit][my_buffer_ctr] = code;
+		val_buffer[macro_no_to_edit][my_buffer_ctr] = value;
+		my_buffer_ctr++;
+	}
+*/
 //////////////////////////////////what happens when start recording and end recording without any key pressed in b/w
 	//Deleting macro
 	// input_event(dev, EV_MSC, MSC_RAW, 27);
@@ -776,9 +787,13 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 		my_buffer_ctr++;
 	}
 
-	if(edit_flg == 1  && macro_no_to_edit_entered==true) {
-		my_buffer[num_of_macros][my_buffer_ctr] = code;
-		val_buffer[num_of_macros][my_buffer_ctr] = value;
+	if (edit_key_time>0)
+	{
+		edit_key_time--;
+	}
+	else if(edit_flg == 1  && macro_no_to_edit_entered==true && value!=2) {
+		my_buffer[macro_no_to_edit][my_buffer_ctr] = code;
+		val_buffer[macro_no_to_edit][my_buffer_ctr] = value;
 		my_buffer_ctr++;
 	}
 
