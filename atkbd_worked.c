@@ -436,24 +436,24 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 		if  (ps2_handle_response(&atkbd->ps2dev, data))
 			goto out;
 
-	if (!atkbd->enabled)
-		goto out;
+	if (!atkbd->enabled){
+		goto out;}
 	//EV_MSC: 4 MSC_RAW: 3
 	//printk("EV_MSC: %u MSC_RAW: %u", EV_MSC, MSC_RAW);
 
 	//Prob this is printing on screen
 	printk(KERN_INFO "Hi i think i am printing characters on screen2");
 
-	// if (releasing_edit_keys)
-	// {
-	// 	releasing_edit_keys--;
-	// 	goto out;
-	// }
-	// if (releasing_delete_keys)
-	// {
-	// 	releasing_delete_keys--;
-	// 	goto out;
-	// }
+	if (releasing_edit_keys)
+	{
+		releasing_edit_keys--;
+		goto out;
+	}
+	if (releasing_delete_keys)
+	{
+		releasing_delete_keys--;
+		goto out;
+	}
 	//Start recording macro
 	if (code==42)
 	{
@@ -517,6 +517,7 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 		goto out;
 	}
 
+
 	//Edit macro
 	if(code==29)
 	{
@@ -526,7 +527,7 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 	{
 		left_ctrl_start_cntr=0;
 	}
-	if (left_ctrl_start_cntr>0 && code==42)
+	if (left_ctrl_start_cntr>0 && code==42 && value!=2)
 	{
 		edit_flg=1-edit_flg;
 		//end recording macro
@@ -536,10 +537,12 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 		}
 		else if (edit_flg==0)
 		{
+			left_ctrl_start_cntr=0;
 			printk(KERN_INFO "End Editing macro");
 			buffer_len[macro_no_to_edit] = my_buffer_ctr;
 			val_buffer[macro_no_to_edit][my_buffer_ctr -1] = 0;
 			my_buffer_ctr = 0;
+			macro_no_to_edit_entered=false;
 		}
 	}
 
@@ -550,7 +553,7 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 		{
 			macro_no_to_edit=code-2;
 			macro_no_to_edit_entered=true;
-			// releasing_edit_keys=1;
+			releasing_edit_keys=1;
 			// edit_key_time=2;
 			goto out;
 		}
@@ -578,18 +581,18 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 	// input_sync(dev);
 	if(code==29)
 	{
-		printk(KERN_INFO, "left_ctrl_start_cntr: %d",left_ctrl_start_cntr);
+		// printk(KERN_INFO, "left_ctrl_start_cntr: %d",left_ctrl_start_cntr);
 		left_ctrl_start_cntr++;
 	}
 	else if (code==157)
 	{
-		printk(KERN_INFO, "left_ctrl_start_cntr: %d",left_ctrl_start_cntr);
+		// printk(KERN_INFO, "left_ctrl_start_cntr: %d",left_ctrl_start_cntr);
 		left_ctrl_start_cntr=0;
 	}
-	if (left_ctrl_start_cntr>0 && code==54)
+	if (left_ctrl_start_cntr>0 && code==54 && value!=2)
 	{
-		printk(KERN_INFO, "delete_flg: %d",delete_flg);
-		delete_flg=1-delete_flg;
+		// printk(KERN_INFO, "delete_flg: %d",delete_flg);
+		delete_flg=1;//-delete_flg;
 		//end recording macro
 		if (delete_flg==1)
 		{
@@ -791,7 +794,7 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 	{
 		edit_key_time--;
 	}
-	else if(edit_flg == 1  && macro_no_to_edit_entered==true && value!=2) {
+	else if(edit_flg == 1  && macro_no_to_edit_entered==true && value!=2 && code!=29) {
 		my_buffer[macro_no_to_edit][my_buffer_ctr] = code;
 		val_buffer[macro_no_to_edit][my_buffer_ctr] = value;
 		my_buffer_ctr++;
