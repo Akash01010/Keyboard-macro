@@ -28,11 +28,12 @@
 #include <linux/libps2.h>
 #include <linux/mutex.h>
 #include <linux/dmi.h>
+
+/* ####################################################### Our Code Starts ####################################################### */
+//libraries added
 #include <linux/kernel.h>
 #include <linux/input-event-codes.h>
-// #include <linux/syscalls.h>
-// #include <linux/fcntl.h>
-// #include <asm/uaccess.h>
+/* ####################################################### Our Code Starts ####################################################### */
 
 #define DRIVER_DESC	"AT and PS/2 keyboard driver"
 
@@ -369,18 +370,24 @@ static unsigned int atkbd_compat_scancode(struct atkbd *atkbd, unsigned int code
 	return code;
 }
 
-/*
- * atkbd_interrupt(). Here takes place processing of data received from
- * the keyboard into events.
- */
+/* ####################################################### Our Code Starts ####################################################### */
+//Globals variables used by our utility
 
+//2D array used to store the keycode of macros
 unsigned int my_buffer[10][1000];
+//2D array to store values of keys corresponding to the keycode
 unsigned int val_buffer[10][1000];
+// To store the length of each macro
 int buffer_len[10];
+// 
 int my_ctr = 0;
+// Total number of macros stored
 int num_of_macros = 0;
+// 
 int my_buffer_ctr = 0;
+// Flag to indicate the whether our utility is in recording mode: If 1 then utility is in record mode else 0
 int macro_flg = 0;
+// 
 int esc_start_cntr=0;
 int shift_start_cntr=0;
 int left_ctrl_start_cntr=0;
@@ -395,26 +402,26 @@ int edit_flg=0;
 int releasing_edit_keys=0;
 int releasing_delete_keys=0;
 int edit_key_time=0;
+/* ####################################################### Our Code Ends ####################################################### */
+
+
+/*
+ * atkbd_interrupt(). Here takes place processing of data received from
+ * the keyboard into events.
+ */
 
 static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 				   unsigned int flags)
 {
 
 	struct atkbd *atkbd = serio_get_drvdata(serio);
-
-	printk(KERN_INFO "____________________________________");
-	printk(KERN_INFO "we are starting");
 	struct input_dev *dev = atkbd->dev;
 	//Data and code are equal to keycode when key is pressed and different number when key is released
 	unsigned int code = data;
-	printk(KERN_INFO "code: %d\n", code);
 	int scroll = 0, hscroll = 0, click = -1;
 	//Value is 1 when pressed and 0 when released and 2 when key is pressed for a while
 	int value;
 	unsigned short keycode;
-
-	// dev_dbg(&serio->dev, "Received %02x flags %02x\n", data, flags);
-	//printk(KERN_INFO "Received %02x flags %02x\n", data, flags);
 
 #if !defined(__i386__) && !defined (__x86_64__)
 	if ((flags & (SERIO_FRAME | SERIO_PARITY)) && (~flags & SERIO_TIMEOUT) && !atkbd->resend && atkbd->write) {
@@ -438,40 +445,49 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 
 	if (!atkbd->enabled){
 		goto out;}
-	//EV_MSC: 4 MSC_RAW: 3
-	//printk("EV_MSC: %u MSC_RAW: %u", EV_MSC, MSC_RAW);
 
-	//Prob this is printing on screen
-	printk(KERN_INFO "Hi i think i am printing characters on screen2");
+/* ####################################################### Our Code Starts ####################################################### */
 
+/*
+
+Whenever a key is pressed a code is generated and this atkbd_interrupt function is called
+When a key is released again this function is called
+
+*/
+	// This is used to ignore the key release of the no of macro user want to edit
 	if (releasing_edit_keys)
 	{
 		releasing_edit_keys--;
 		goto out;
 	}
+	// This is used to ignore the key release of the no of macro user want to delete
 	if (releasing_delete_keys)
 	{
 		releasing_delete_keys--;
 		goto out;
 	}
-	//Start recording macro
+
+	//Start recording macro code for left shift is 42
 	if (code==42)
 	{
 		shift_start_cntr++;
 	}
+	//Start recording macro code for left shift is 42
 	else if (code==170)
 	{
 		shift_start_cntr=0;
 	}
-
+	//When esc key is pressed along with left shift control enters here
 	if (shift_start_cntr>0 && code==1)
 	{
+		// changing the mode to recording mode and vice-versa
 		macro_flg=1-macro_flg;
-		//end recording macro
+		//before start recording macro
 		if (macro_flg==1)
 		{
 			printk(KERN_INFO "Start recording macro");
 		}
+		//while ending recording macro
 		else if (macro_flg==0)
 		{
 			printk(KERN_INFO "End recording macro");
@@ -485,30 +501,26 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 	
 
 	//Displaying macro
+	//keycode for esc key
 	if(code==1)
 	{
 		esc_start_cntr++;
 	}
+	//code generated while esc key is released
 	else if (code==129)
 	{
 		esc_start_cntr=0;
 	}
 
+	// this is where the flow goes after esc key and a number is pressed
 	if(2<=code && code<=10 && esc_start_cntr>0){
-		printk(KERN_INFO "Displaying macro");
-
-		printk(KERN_INFO "Printing macro: ");
-		for (my_ctr = 0; my_ctr < buffer_len[code - 2]; my_ctr++)
-		{
-			printk(KERN_INFO "my buffer: %u ", my_buffer[code - 2][my_ctr]);
-			printk(KERN_INFO "val buffer:%u ", val_buffer[code - 2][my_ctr]);
-		}
 		printk(KERN_INFO "Length of buffer: %d",buffer_len[code - 2]);
 
 		for(my_ctr = 0; my_ctr < buffer_len[code-2]; my_ctr++) {
 			int val = 1;
 			if(my_ctr == (buffer_len[code-2]-1))
 				val = 0;
+			//This is where the display of a character of macro in any application is done. input_report_key prints it in the application
 			input_event(dev, EV_MSC, MSC_RAW, my_buffer[code-2][my_ctr]);
 			input_event(dev, EV_MSC, MSC_SCAN, my_buffer[code-2][my_ctr]);
 			input_report_key(dev,my_buffer[code-2][my_ctr],val_buffer[code-2][my_ctr]);
@@ -519,22 +531,27 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 
 
 	//Edit macro
+	// code for left ctrl
 	if(code==29)
 	{
 		left_ctrl_start_cntr++;
 	}
+	// code for right ctrl
 	else if (code==157)
 	{
 		left_ctrl_start_cntr=0;
 	}
+	// this is where 
 	if (left_ctrl_start_cntr>0 && code==42 && value!=2)
 	{
+		// flip the edit flag 
 		edit_flg=1-edit_flg;
-		//end recording macro
+		// before entering into edit mode
 		if (edit_flg==1)
 		{
 			printk(KERN_INFO "Editing macro");
 		}
+		//  before leaving edit mode
 		else if (edit_flg==0)
 		{
 			left_ctrl_start_cntr=0;
@@ -546,82 +563,45 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 		}
 	}
 
-
+	// if in editing mode (get the number of macro to be edited)
 	if (edit_flg==1 && macro_no_to_edit_entered==false)
 	{
+		// if keys from 1 to 9 are pressed
 		if (2<=code && code<=10)
 		{
 			macro_no_to_edit=code-2;
 			macro_no_to_edit_entered=true;
 			releasing_edit_keys=1;
-			// edit_key_time=2;
+			// control gets transferred to out:
 			goto out;
 		}
 	}
-/*
-	if (edit_key_time>0)
-	{
-		edit_key_time--;
-	}
-	else if(edit_flg == 1  && macro_no_to_edit_entered==true && value!=2) {
-		my_buffer[macro_no_to_edit][my_buffer_ctr] = code;
-		val_buffer[macro_no_to_edit][my_buffer_ctr] = value;
-		my_buffer_ctr++;
-	}
-*/
-//////////////////////////////////what happens when start recording and end recording without any key pressed in b/w
-	//Deleting macro
-	// input_event(dev, EV_MSC, MSC_RAW, 27);
-	// input_event(dev, EV_MSC, MSC_SCAN, 27);
-	// input_report_key(dev,27,0);
-	// input_sync(dev);
-	// input_event(dev, EV_MSC, MSC_RAW, 27);
-	// input_event(dev, EV_MSC, MSC_SCAN, 27);
-	// input_report_key(dev,27,1);
-	// input_sync(dev);
+
+	//Deleting Macro
 	if(code==29)
 	{
-		// printk(KERN_INFO, "left_ctrl_start_cntr: %d",left_ctrl_start_cntr);
 		left_ctrl_start_cntr++;
 	}
+	// code of right ctrl = 157
 	else if (code==157)
 	{
-		// printk(KERN_INFO, "left_ctrl_start_cntr: %d",left_ctrl_start_cntr);
 		left_ctrl_start_cntr=0;
 	}
+	// code for right shift = 54
 	if (left_ctrl_start_cntr>0 && code==54 && value!=2)
 	{
-		// printk(KERN_INFO, "delete_flg: %d",delete_flg);
-		delete_flg=1;//-delete_flg;
-		//end recording macro
+		//delete_flg;
+		delete_flg=1;
+		
 		if (delete_flg==1)
 		{
 			printk(KERN_INFO "Deleting macro");
 		}
-		// else if (delete_flg==0)
-		// {
-		// 	printk(KERN_INFO "End Deleting macro");
-		// 	printk(KERN_INFO "Printing 2D array");
-		// 	for (my_ctr = 0;my_ctr < num_of_macros; ++my_ctr)
-		// 	{
-		// 		for (my_ctr2 = 0; my_ctr2 < buffer_len[my_ctr+1]; ++my_ctr2)
-		// 		{
-		// 			printk(KERN_INFO, "my_buffer: %u",my_buffer[my_ctr][my_ctr2]);
-		// 			printk(KERN_INFO, "val_buffer: %d",val_buffer[my_ctr][my_ctr2]);
-		// 			// my_buffer[my_ctr][my_ctr2]=my_buffer[my_ctr+1][my_ctr2];
-		// 			// val_buffer[my_ctr][my_ctr2]=val_buffer[my_ctr+1][my_ctr2];
-		// 		}
-		// 		// buffer_len[my_ctr]=buffer_len[my_ctr+1];
-		// 	}
-			
-		// 	// buffer_len[macro_no_to_edit] = my_buffer_ctr;
-		// 	// val_buffer[macro_no_to_edit][my_buffer_ctr -1] = 0;
-		// 	// my_buffer_ctr = 0;
-		// }
 	}
-
+	// If in deleting mode and no number is recieved till now 
 	if (delete_flg==1 && macro_no_to_delete_entered==false)
 	{
+		// gets the key corresponding to the macro which is to be deleted
 		if (2<=code && code<=10)
 		{
 			macro_no_to_delete=code-2;
@@ -630,7 +610,9 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 			goto out;
 		}
 	}
-	else if (delete_flg==1 && macro_no_to_delete_entered==true)
+	// if in deleting mode and the macro number to be deleted is recieved
+	// actual deletion takes place here
+	else if (delete_flg==1 && macro_no_to_delete_entered==true && macro_no_to_delete < num_of_macros)
 	{
 		for (my_ctr = macro_no_to_delete;my_ctr < num_of_macros; ++my_ctr)
 		{
@@ -645,10 +627,17 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 		macro_no_to_delete_entered=false;
 		delete_flg=0;
 	}
+	else if (delete_flg==1 && macro_no_to_delete_entered==true && macro_no_to_delete >= num_of_macros)
+	{
+		delete_flg=0;
+		macro_no_to_delete_entered=false;
+	}
+
+/* ####################################################### Our Code Ends ####################################################### */
+
 
 	input_event(dev, EV_MSC, MSC_RAW, code);
 	if (atkbd_platform_scancode_fixup){
-		// printk(KERN_INFO "I am fixedup");
 //look at this line
 		code = atkbd_platform_scancode_fixup(atkbd, code);
 	}
@@ -777,11 +766,10 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 		input_report_rel(dev, REL_HWHEEL, hscroll);
 		input_sync(dev);
 	}
-//what this line is doing??
+
 	atkbd->release = false;
 
-	printk(KERN_INFO "KEY code in out : %u", keycode);
-	printk(KERN_INFO " code in out : %u", code);
+/* ####################################################### Our Code Starts ####################################################### */
 
 	//recording
 	if(macro_flg == 1 && num_of_macros < 10) {
@@ -799,6 +787,8 @@ static irqreturn_t atkbd_interrupt(struct serio *serio, unsigned char data,
 		val_buffer[macro_no_to_edit][my_buffer_ctr] = value;
 		my_buffer_ctr++;
 	}
+
+/* ####################################################### Our Code Ends ####################################################### */
 
 out:
 	return IRQ_HANDLED;
